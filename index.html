@@ -2,29 +2,128 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <title>書籍連續拍照命名工具</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; margin-top: 20px; }
-    video, canvas { max-width: 90%; margin-top: 10px; }
-    input, button { margin: 10px; font-size: 16px; padding: 6px; }
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin: 20px 10px;
+      font-size: 18px;
+      background: #f9f9f9;
+      color: #222;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    label {
+      display: block;
+      margin: 15px auto 5px;
+      max-width: 480px;
+      font-weight: 600;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      font-size: 18px;
+      padding: 10px 12px;
+      width: 90%;
+      max-width: 480px;
+      border: 2px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+      outline-offset: 2px;
+      transition: border-color 0.3s ease;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus {
+      border-color: #4a90e2;
+    }
+
+    video {
+      width: 90vw;
+      max-width: 480px;
+      height: auto;
+      margin: 15px auto;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      background: #000;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    canvas {
+      display: none;
+    }
+
+    button {
+      font-size: 20px;
+      padding: 14px 24px;
+      margin: 10px auto;
+      width: 90vw;
+      max-width: 480px;
+      border: none;
+      border-radius: 10px;
+      background-color: #4a90e2;
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 4px 8px rgba(74, 144, 226, 0.4);
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover,
+    button:focus {
+      background-color: #357ABD;
+      outline: none;
+    }
+
+    #switchBtn {
+      background-color: #f39c12;
+      box-shadow: 0 4px 8px rgba(243, 156, 18, 0.4);
+    }
+
+    #switchBtn:hover,
+    #switchBtn:focus {
+      background-color: #d87c0a;
+    }
+
+    #status {
+      font-size: 16px;
+      margin-top: 15px;
+      color: #333;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
   <h2>📚 書籍連續拍照命名工具</h2>
 
-  <label>書名：<input type="text" id="bookName" placeholder="例如：C語言入門"></label><br />
-  <label>當前頁數：<input type="number" id="pageNumber" value="1" min="1"></label><br />
+  <label for="bookName">書名：</label>
+  <input type="text" id="bookName" placeholder="例如：C語言入門" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 
-  <video id="video" autoplay playsinline width="480" height="360"></video><br />
+  <label for="pageNumber">當前頁數：</label>
+  <input type="number" id="pageNumber" value="1" min="1" />
+
+  <video id="video" autoplay playsinline></video>
 
   <button onclick="capture()">📸 拍照</button>
-  <button onclick="downloadZip()">⬇️ 下載全部 ZIP</button><br />
+  <button onclick="downloadZip()">⬇️ 下載全部 ZIP</button>
+  <button id="switchBtn">🔄 切換鏡頭（後鏡頭）</button>
 
   <p id="status">尚未拍攝</p>
 
-  <canvas id="canvas" width="480" height="360" style="display:none;"></canvas>
+  <canvas id="canvas" width="480" height="360"></canvas>
 
   <script>
     const video = document.getElementById('video');
@@ -33,30 +132,47 @@
     const pageInput = document.getElementById('pageNumber');
     const bookInput = document.getElementById('bookName');
     const status = document.getElementById('status');
+    const switchBtn = document.getElementById('switchBtn');
 
     const zip = new JSZip();
     const imagesFolder = zip.folder("images");
 
     let captureCount = 0;
+    let useBackCamera = true; // 初始使用後鏡頭
+    let currentStream = null;
 
-    // 強制使用後置鏡頭
     async function startCamera() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: "environment" } }
-        });
-        video.srcObject = stream;
+        const constraints = {
+          video: { facingMode: useBackCamera ? { exact: "environment" } : "user" }
+        };
+        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = currentStream;
+        switchBtn.textContent = useBackCamera ? "🔄 切換鏡頭（後鏡頭）" : "🔄 切換鏡頭（前鏡頭）";
+        status.textContent = `鏡頭已切換為 ${useBackCamera ? "後鏡頭" : "前鏡頭"}`;
       } catch (err) {
-        // 如果指定後鏡頭失敗，改用一般預設攝影機
         try {
-          const streamFallback = await navigator.mediaDevices.getUserMedia({ video: true });
-          video.srcObject = streamFallback;
-          status.textContent = "⚠️ 無法取得後置鏡頭，已切換至預設鏡頭";
+          const fallbackConstraints = {
+            video: { facingMode: useBackCamera ? "environment" : "user" }
+          };
+          currentStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+          video.srcObject = currentStream;
+          switchBtn.textContent = useBackCamera ? "🔄 切換鏡頭（後鏡頭）" : "🔄 切換鏡頭（前鏡頭）";
+          status.textContent = `鏡頭已切換（fallback）為 ${useBackCamera ? "後鏡頭" : "前鏡頭"}`;
         } catch (err2) {
           alert("無法啟用攝影機：" + err2.message);
         }
       }
     }
+
+    switchBtn.onclick = () => {
+      useBackCamera = !useBackCamera;
+      startCamera();
+    };
+
     startCamera();
 
     function sanitize(str) {
