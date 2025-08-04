@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>書籍連續拍照命名工具</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -14,13 +14,13 @@
 <body>
   <h2>📚 書籍連續拍照命名工具</h2>
 
-  <label>書名：<input type="text" id="bookName" placeholder="例如：C語言入門"></label><br>
-  <label>當前頁數：<input type="number" id="pageNumber" value="1"></label><br>
+  <label>書名：<input type="text" id="bookName" placeholder="例如：C語言入門"></label><br />
+  <label>當前頁數：<input type="number" id="pageNumber" value="1" min="1"></label><br />
 
-  <video id="video" autoplay playsinline width="480" height="360"></video><br>
+  <video id="video" autoplay playsinline width="480" height="360"></video><br />
 
   <button onclick="capture()">📸 拍照</button>
-  <button onclick="downloadZip()">⬇️ 下載全部 ZIP</button><br>
+  <button onclick="downloadZip()">⬇️ 下載全部 ZIP</button><br />
 
   <p id="status">尚未拍攝</p>
 
@@ -39,10 +39,25 @@
 
     let captureCount = 0;
 
-    // 啟用攝影機
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => video.srcObject = stream)
-      .catch(err => alert("無法啟用攝影機：" + err));
+    // 強制使用後置鏡頭
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: "environment" } }
+        });
+        video.srcObject = stream;
+      } catch (err) {
+        // 如果指定後鏡頭失敗，改用一般預設攝影機
+        try {
+          const streamFallback = await navigator.mediaDevices.getUserMedia({ video: true });
+          video.srcObject = streamFallback;
+          status.textContent = "⚠️ 無法取得後置鏡頭，已切換至預設鏡頭";
+        } catch (err2) {
+          alert("無法啟用攝影機：" + err2.message);
+        }
+      }
+    }
+    startCamera();
 
     function sanitize(str) {
       return str.trim().replace(/[^a-zA-Z0-9一-龥_\-]/g, "_");
@@ -55,7 +70,9 @@
         return;
       }
 
-      const page = parseInt(pageInput.value, 10);
+      let page = parseInt(pageInput.value, 10);
+      if (isNaN(page) || page < 1) page = 1;
+
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
 
