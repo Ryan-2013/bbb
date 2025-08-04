@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>書籍連續拍照命名工具</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 20px; }
+    video, canvas { max-width: 90%; margin-top: 10px; }
+    input, button { margin: 10px; font-size: 16px; padding: 6px; }
+  </style>
+</head>
+<body>
+  <h2>📚 書籍連續拍照命名工具</h2>
+
+  <label>書名：<input type="text" id="bookName" placeholder="例如：C語言入門"></label><br>
+  <label>當前頁數：<input type="number" id="pageNumber" value="1"></label><br>
+
+  <video id="video" autoplay playsinline width="480" height="360"></video><br>
+
+  <button onclick="capture()">📸 拍照</button>
+  <button onclick="downloadZip()">⬇️ 下載全部 ZIP</button><br>
+
+  <p id="status">尚未拍攝</p>
+
+  <canvas id="canvas" width="480" height="360" style="display:none;"></canvas>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const pageInput = document.getElementById('pageNumber');
+    const bookInput = document.getElementById('bookName');
+    const status = document.getElementById('status');
+
+    const zip = new JSZip();
+    const imagesFolder = zip.folder("images");
+
+    let captureCount = 0;
+
+    // 啟用攝影機
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => video.srcObject = stream)
+      .catch(err => alert("無法啟用攝影機：" + err));
+
+    function sanitize(str) {
+      return str.trim().replace(/[^a-zA-Z0-9一-龥_\-]/g, "_");
+    }
+
+    async function capture() {
+      const book = sanitize(bookInput.value);
+      if (!book) {
+        alert("請先輸入書名");
+        return;
+      }
+
+      const page = parseInt(pageInput.value, 10);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+
+      const filename = `${book}_${page}.png`;
+      imagesFolder.file(filename, blob);
+      captureCount++;
+
+      status.textContent = `✅ 已拍攝 ${captureCount} 張（最新為 ${filename}）`;
+
+      pageInput.value = page + 1;
+    }
+
+    async function downloadZip() {
+      if (captureCount === 0) {
+        alert("尚未拍照，無檔案可下載！");
+        return;
+      }
+      status.textContent = "📦 正在打包 ZIP，請稍候...";
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, `${sanitize(bookInput.value)}_pages.zip`);
+      status.textContent = "✅ 下載完成！你可以清除重拍或關掉網頁。";
+    }
+  </script>
+</body>
+</html>
